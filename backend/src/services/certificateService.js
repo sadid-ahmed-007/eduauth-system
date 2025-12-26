@@ -3,7 +3,7 @@ const { v4: uuidv4 } = require('uuid');
 const { generateCertificateHash } = require('../utils/cryptoUtils');
 
 const issueCertificate = async (certData, loggedInUserId) => {
-    const { studentNid, credentialName, type, issueDate, details } = certData;
+    const { studentNid, credentialName, type, issueDate, fieldOfStudy, gradeGpa, metadata, details } = certData;
     const connection = await db.getConnection();
 
     try {
@@ -27,7 +27,10 @@ const issueCertificate = async (certData, loggedInUserId) => {
         // 1. Find Student by NID
         // We join with users table to handle the data structure correctly
         const [identity] = await connection.execute(
-            'SELECT s.student_id FROM student_identities si JOIN students s ON si.identity_id = s.identity_id WHERE si.identity_number_hash = ?',
+            `SELECT s.student_id
+             FROM student_identities si
+             JOIN students s ON si.identity_id = s.identity_id
+             WHERE si.identity_number_hash = ?`,
             [studentNid]
         );
 
@@ -38,7 +41,13 @@ const issueCertificate = async (certData, loggedInUserId) => {
         const studentId = identity[0].student_id;
 
         // 2. Generate Unique Hash (Digital Signature)
-        const uniqueString = `${studentId}-${realIssuerId}-${credentialName}-${issueDate}`;
+        const incomingMetadata = metadata || details || {};
+        const normalizedMetadata = {
+            ...incomingMetadata,
+            major: fieldOfStudy || incomingMetadata.major || null,
+            cgpa: gradeGpa || incomingMetadata.cgpa || null
+        };
+        const uniqueString = `${studentId}-${realIssuerId}-${credentialName}-${issueDate}-${JSON.stringify(normalizedMetadata)}`;
         const certHash = generateCertificateHash(uniqueString);
 
         // 3. Insert into Database
@@ -47,9 +56,20 @@ const issueCertificate = async (certData, loggedInUserId) => {
         // Note: We use 'realIssuerId' here, NOT 'loggedInUserId'
         await connection.execute(
             `INSERT INTO certificates 
-            (certificate_id, student_id, issuer_id, certificate_type, credential_name, issue_date, certificate_hash, status, metadata_json) 
-            VALUES (?, ?, ?, ?, ?, ?, ?, 'active', ?)`,
-            [certUuid, studentId, realIssuerId, type, credentialName, issueDate, certHash, JSON.stringify(details)]
+            (certificate_id, student_id, issuer_id, certificate_type, credential_name, field_of_study, grade_gpa, issue_date, certificate_hash, status, metadata) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?)`,
+            [
+                certUuid,
+                studentId,
+                realIssuerId,
+                type,
+                credentialName,
+                fieldOfStudy || normalizedMetadata.major,
+                gradeGpa || normalizedMetadata.cgpa,
+                issueDate,
+                certHash,
+                JSON.stringify(normalizedMetadata)
+            ]
         );
 
         return { certificate_id: certUuid, certificate_hash: certHash };

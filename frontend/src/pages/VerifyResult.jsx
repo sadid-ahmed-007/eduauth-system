@@ -85,11 +85,19 @@ const VerifyResult = () => {
                         </div>
                         <div>
                             <p className="text-gray-500 text-sm">Credential Type</p>
-                            <p className="font-medium text-gray-800 capitalize">{data.credential_name}</p> 
+                            <p className="font-medium text-gray-800 capitalize">{data.certificate_type}</p> 
                         </div>
                          <div className="text-right">
                             <p className="text-gray-500 text-sm">Status</p>
                             <p className="font-medium text-green-600 capitalize">{data.status}</p>
+                        </div>
+                        <div>
+                            <p className="text-gray-500 text-sm">Identity Type</p>
+                            <p className="font-medium text-gray-800 capitalize">{data.identity_type || 'nid'}</p>
+                        </div>
+                        <div className="text-right">
+                            <p className="text-gray-500 text-sm">Identity Hash</p>
+                            <p className="font-mono text-xs text-gray-700 break-all">{data.identity_hash}</p>
                         </div>
                     </div>
 

@@ -4,9 +4,20 @@ const crypto = require('crypto');
 
 // 1. Issue Certificate (Strict Mode)
 const issueCertificate = async (req, res) => {
-    // We now accept 'localStudentId' OR 'nid', but we prioritize checking enrollment
-    const { studentIdentifier, credentialName, type, issueDate, details } = req.body; 
+    const { localStudentId, credentialName, type, issueDate, fieldOfStudy, gradeGpa, metadata, details } = req.body;
     const issuerId = req.user.institution_id;
+
+    if (!localStudentId || !credentialName || !type || !issueDate) {
+        return res.status(400).json({ message: 'Local student ID, credential name, type, and issue date are required.' });
+    }
+
+    if (!issuerId) {
+        return res.status(403).json({ message: 'Institution context missing. Please re-login.' });
+    }
+
+    if (req.user.can_issue === 0 || req.user.can_issue === false) {
+        return res.status(403).json({ message: 'Issuing is disabled by the authority.' });
+    }
 
     const connection = await db.getConnection();
     try {
@@ -20,8 +31,8 @@ const issueCertificate = async (req, res) => {
              JOIN students s ON ie.student_id = s.student_id
              JOIN student_identities si ON s.identity_id = si.identity_id
              WHERE ie.institution_id = ? 
-             AND (ie.local_student_id = ? OR si.identity_number_hash = ?)`,
-            [issuerId, studentIdentifier, studentIdentifier]
+             AND ie.local_student_id = ?`,
+            [issuerId, localStudentId]
         );
 
         if (enrolledStudent.length === 0) {
@@ -32,16 +43,34 @@ const issueCertificate = async (req, res) => {
         const studentName = enrolledStudent[0].full_name;
 
         // Step B: Generate Unique Hash
-        const uniqueString = `${issuerId}-${studentId}-${credentialName}-${Date.now()}`;
+        const incomingMetadata = metadata || details || {};
+        const normalizedMetadata = {
+            ...incomingMetadata,
+            major: fieldOfStudy || incomingMetadata.major || null,
+            cgpa: gradeGpa || incomingMetadata.cgpa || null
+        };
+
+        const uniqueString = `${issuerId}-${studentId}-${credentialName}-${issueDate}-${JSON.stringify(normalizedMetadata)}-${Date.now()}`;
         const certificateHash = crypto.createHash('sha256').update(uniqueString).digest('hex');
         const certId = uuidv4();
 
         // Step C: Insert Certificate
         await connection.execute(
             `INSERT INTO certificates 
-            (certificate_id, student_id, issuer_id, credential_name, certificate_type, issue_date, certificate_hash, status, metadata) 
-            VALUES (?, ?, ?, ?, ?, ?, ?, 'active', ?)`,
-            [certId, studentId, issuerId, credentialName, type, issueDate, certificateHash, JSON.stringify(details || {})]
+            (certificate_id, student_id, issuer_id, certificate_type, credential_name, field_of_study, grade_gpa, issue_date, certificate_hash, status, metadata) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?)`,
+            [
+                certId,
+                studentId,
+                issuerId,
+                type,
+                credentialName,
+                fieldOfStudy || normalizedMetadata.major,
+                gradeGpa || normalizedMetadata.cgpa,
+                issueDate,
+                certificateHash,
+                JSON.stringify(normalizedMetadata)
+            ]
         );
 
         await connection.commit();

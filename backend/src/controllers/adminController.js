@@ -3,62 +3,53 @@ const db = require('../config/db');
 // --- GETTERS ---
 
 // 1. Get Pending Users (Both Students and Institutions)
-// DEBUG VERSION
 const getPendingUsers = async (req, res) => {
-    const { type } = req.query; 
-    console.log(`[DEBUG] Admin requested pending list for: ${type}`);
+    const { type } = req.query;
+    if (type !== 'student' && type !== 'institution') {
+        return res.status(400).json({ message: "Invalid type. Use 'student' or 'institution'." });
+    }
 
     const connection = await db.getConnection();
     try {
         let query = '';
         if (type === 'student') {
-            // Log raw count first
-            const [count] = await connection.execute("SELECT count(*) as count FROM users WHERE role='student' AND status='pending'");
-            console.log(`[DEBUG] Pending Students in Users table: ${count[0].count}`);
-
-            query = `SELECT u.user_id, u.email, s.photo_url, si.full_name, si.identity_number_hash as nid, u.status 
-                     FROM users u 
-                     JOIN students s ON u.user_id = s.user_id 
+            query = `SELECT u.user_id, u.email, s.photo_url, si.full_name, si.identity_number_hash AS nid, u.status
+                     FROM users u
+                     JOIN students s ON u.user_id = s.user_id
                      JOIN student_identities si ON s.identity_id = si.identity_id
-                     WHERE u.status = 'pending'`;
+                     WHERE u.role = 'student' AND u.status = 'pending'`;
         } else {
-            // Log raw count first
-            const [count] = await connection.execute("SELECT count(*) as count FROM users WHERE role='institution' AND status='pending'");
-            console.log(`[DEBUG] Pending Institutions in Users table: ${count[0].count}`);
-
-            query = `SELECT u.user_id, u.email, i.institution_name, i.institution_type, i.registration_number, u.status 
-                     FROM users u 
-                     JOIN institutions i ON u.user_id = i.user_id 
-                     WHERE u.status = 'pending'`;
+            query = `SELECT u.user_id, u.email, i.institution_name, i.institution_type, i.registration_number, i.status
+                     FROM users u
+                     JOIN institutions i ON u.user_id = i.user_id
+                     WHERE u.role = 'institution' AND u.status = 'pending' AND i.status = 'pending'`;
         }
 
         const [rows] = await connection.execute(query);
-        console.log(`[DEBUG] Query returned ${rows.length} rows`);
-        
-        if (rows.length === 0) {
-            console.log("[DEBUG] WARNING: Rows is 0. This means the JOIN failed (Profile missing) or Status is not 'pending'.");
-        }
 
         res.json(rows);
     } catch (error) {
-        console.error("[DEBUG] ERROR:", error);
+        console.error("Admin Pending Error:", error);
         res.status(500).json({ message: 'Server error' });
     } finally {
         connection.release();
     }
 };
 
-// 2. Get Active Institutions (With 'Can Issue' status)
 // 2. Get Active Institutions
 const getActiveInstitutions = async (req, res) => {
     const connection = await db.getConnection();
     try {
-        // Query adjusted for the new schema
         const [rows] = await connection.execute(
-            `SELECT u.user_id, i.institution_name, i.institution_type, i.can_issue_certificates 
-             FROM users u 
-             JOIN institutions i ON u.user_id = i.user_id 
-             WHERE u.status = 'active'` // Ensure we only get active ones
+            `SELECT u.user_id,
+                    i.institution_name,
+                    i.institution_type,
+                    i.can_issue_certificates
+             FROM users u
+             JOIN institutions i ON i.user_id = u.user_id
+             WHERE u.role = 'institution'
+               AND u.status = 'active'
+               AND i.status = 'approved'`
         );
         res.json(rows);
     } catch (error) {
@@ -74,14 +65,56 @@ const getActiveInstitutions = async (req, res) => {
 // 3. Approve Any User
 const approveUser = async (req, res) => {
     const { userId } = req.params;
+    const adminUserId = req.user?.user_id || null;
     const connection = await db.getConnection();
     try {
-        await connection.execute("UPDATE users SET status = 'active' WHERE user_id = ?", [userId]);
-        
-        // Also update institutions table status if it exists
-        await connection.execute("UPDATE institutions SET status = 'approved' WHERE user_id = ?", [userId]);
+        const [users] = await connection.execute(
+            "SELECT user_id, role, status FROM users WHERE user_id = ?",
+            [userId]
+        );
+
+        if (users.length === 0) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        await connection.beginTransaction();
+
+        await connection.execute(
+            "UPDATE users SET status = 'active' WHERE user_id = ?",
+            [userId]
+        );
+
+        const role = users[0].role;
+        if (role === 'student') {
+            await connection.execute(
+                `UPDATE student_identities si
+                 JOIN students s ON s.identity_id = si.identity_id
+                 SET si.identity_verified = 1, si.verified_by = ?, si.verified_at = NOW()
+                 WHERE s.user_id = ?`,
+                [adminUserId, userId]
+            );
+        }
+
+        if (role === 'institution') {
+            await connection.execute(
+                `UPDATE institutions
+                 SET status = 'approved',
+                     is_verified = 1,
+                     verified_by = ?,
+                     verified_at = NOW(),
+                     can_issue_certificates = 1
+                 WHERE user_id = ?`,
+                [adminUserId, userId]
+            );
+        }
+
+        await connection.commit();
 
         res.json({ message: 'User Approved Successfully' });
+    } catch (error) {
+        await connection.rollback();
+        console.error("Approval Error:", error);
+        res.status(500).json({ message: 'Failed to approve user' });
     } finally {
         connection.release();
     }
@@ -93,10 +126,13 @@ const toggleIssuePermission = async (req, res) => {
     const { canIssue } = req.body; // true or false
     const connection = await db.getConnection();
     try {
-        await connection.execute(
+        const [result] = await connection.execute(
             "UPDATE institutions SET can_issue_certificates = ? WHERE user_id = ?", 
             [canIssue, userId]
         );
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ message: 'Institution not found' });
+        }
         res.json({ message: `Permission updated to ${canIssue}` });
     } finally {
         connection.release();

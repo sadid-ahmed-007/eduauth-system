@@ -33,6 +33,12 @@ const Register = () => {
         e.preventDefault();
         setLoading(true);
 
+        if (role === 'student' && !file) {
+            toast.error('Profile photo is required for students.');
+            setLoading(false);
+            return;
+        }
+
         // 1. Create FormData object (Required for sending files)
         const data = new FormData();
         data.append('email', formData.email);
@@ -128,6 +134,7 @@ const Register = () => {
                                         accept="image/*"
                                         onChange={handleFileChange} 
                                         className="w-full" 
+                                        required
                                     />
                                     <p className="text-xs text-gray-400 mt-2">Recommended: Square passport size image</p>
                                 </div>

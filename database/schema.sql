@@ -77,7 +77,7 @@ CREATE TABLE institutions (
   institution_id VARCHAR(255) NOT NULL,
   user_id VARCHAR(255) NOT NULL,
   institution_name VARCHAR(255) NOT NULL,
-  institution_type ENUM('university', 'college', 'vocational_school', 'training_center', 'board') NOT NULL,
+  institution_type ENUM('university', 'college', 'polytechnic', 'vocational_school', 'training_center', 'board') NOT NULL,
   registration_number VARCHAR(100) NOT NULL,
   address TEXT NULL,
   website VARCHAR(255) NULL,
@@ -125,6 +125,8 @@ CREATE TABLE institution_enrollments (
     local_student_id VARCHAR(50) NOT NULL, 
     department VARCHAR(100) NOT NULL,
     session_year VARCHAR(20) NOT NULL,
+    UNIQUE KEY idx_enrollment_institution_student (institution_id, student_id),
+    UNIQUE KEY idx_enrollment_institution_local (institution_id, local_student_id),
     FOREIGN KEY (institution_id) REFERENCES institutions(institution_id) ON DELETE CASCADE,
     FOREIGN KEY (student_id) REFERENCES students(student_id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -201,3 +203,7 @@ CREATE TABLE system_settings (
 INSERT INTO system_settings (setting_key, setting_value, description) VALUES
 ('max_login_attempts', '5', 'Lock account after 5 failed tries'),
 ('recruiter_approval_required', 'true', 'Recruiters must be approved by Admin');
+
+-- Seed Super Admin (replace password_hash before production use)
+INSERT INTO users (user_id, email, password_hash, role, status, email_verified)
+VALUES (UUID(), 'admin@ugc.gov.bd', '$2a$10$REPLACE_WITH_BCRYPT_HASH', 'admin', 'active', 1);

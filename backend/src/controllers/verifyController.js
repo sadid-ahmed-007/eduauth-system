@@ -10,10 +10,16 @@ const verifyCertificate = async (req, res) => {
             SELECT 
                 c.certificate_hash,
                 c.credential_name,
+                c.certificate_type,
                 c.issue_date,
+                c.field_of_study,
+                c.grade_gpa,
+                c.metadata,
                 c.status,
                 s.full_name as student_name,
-                s.photo_url,
+                s.identity_number_hash as identity_hash,
+                s.identity_type,
+                st.photo_url,
                 i.institution_name as issuer_name,
                 i.institution_type
             FROM certificates c

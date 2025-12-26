@@ -2,6 +2,7 @@ const express = require('express');
 const multer = require('multer');
 const path = require('path');
 const authController = require('../controllers/authController');
+const { protect } = require('../middlewares/authMiddleware');
 
 const router = express.Router();
 
@@ -23,5 +24,6 @@ router.post('/register', upload.single('photo'), authController.register);
 
 // Login Route (Unchanged)
 router.post('/login', authController.login);
+router.get('/me', protect, authController.getMe);
 
 module.exports = router;

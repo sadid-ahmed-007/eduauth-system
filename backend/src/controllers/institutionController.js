@@ -1,37 +1,51 @@
 const db = require('../config/db');
-const crypto = require('crypto'); // <--- IMPORT THIS
+const crypto = require('crypto');
+
+const hashIdentityNumber = (identityNumber) => {
+    const normalized = String(identityNumber || '').trim();
+    if (!normalized) {
+        return null;
+    }
+    return crypto.createHash('sha256').update(normalized).digest('hex');
+};
 
 // 1. Enroll a Student
 const enrollStudent = async (req, res) => {
     const { localStudentId, nid, department, session } = req.body;
-    const institutionId = req.user.institution_id; 
+    const institutionId = req.user.institution_id;
 
-    // DEBUG LOGS (Check your terminal if this fails again)
-    console.log("Enrollment Attempt:", { institutionId, nid, localStudentId });
+    if (!institutionId) {
+        return res.status(403).json({ message: 'Institution context missing. Please re-login.' });
+    }
+
+    if (!nid || !localStudentId || !department || !session) {
+        return res.status(400).json({ message: 'NID, local student ID, department, and session are required.' });
+    }
+
+    const nidHash = hashIdentityNumber(nid);
+    if (!nidHash) {
+        return res.status(400).json({ message: 'NID is required.' });
+    }
 
     const connection = await db.getConnection();
     try {
-        // --- CRITICAL FIX: HASH THE INPUT NID ---
-        // The DB stores the SHA-256 hash, not the plain NID.
-        const nidHash = crypto.createHash('sha256').update(nid).digest('hex');
-        // ----------------------------------------
-
-        // Step A: Find the Global Student by NID Hash
         const [students] = await connection.execute(
             `SELECT s.student_id 
              FROM students s 
              JOIN student_identities si ON s.identity_id = si.identity_id 
-             WHERE si.identity_number_hash = ?`, 
-            [nidHash] // <--- Query using the HASH
+             JOIN users u ON s.user_id = u.user_id
+             WHERE si.identity_number_hash = ?
+               AND u.role = 'student'
+               AND u.status = 'active'`,
+            [nidHash]
         );
 
         if (students.length === 0) {
-            return res.status(404).json({ message: 'Student NID not found. They must register on EduAuth first.' });
+            return res.status(404).json({ message: 'Student not found or not yet approved.' });
         }
 
         const globalStudentId = students[0].student_id;
 
-        // Step B: Check if already enrolled
         const [existing] = await connection.execute(
             `SELECT * FROM institution_enrollments WHERE institution_id = ? AND student_id = ?`,
             [institutionId, globalStudentId]
@@ -41,7 +55,15 @@ const enrollStudent = async (req, res) => {
             return res.status(400).json({ message: 'Student is already enrolled.' });
         }
 
-        // Step C: Insert Enrollment
+        const [existingLocalId] = await connection.execute(
+            `SELECT enrollment_id FROM institution_enrollments WHERE institution_id = ? AND local_student_id = ?`,
+            [institutionId, localStudentId]
+        );
+
+        if (existingLocalId.length > 0) {
+            return res.status(409).json({ message: 'Local student ID is already in use.' });
+        }
+
         await connection.execute(
             `INSERT INTO institution_enrollments (institution_id, student_id, local_student_id, department, session_year)
              VALUES (?, ?, ?, ?, ?)`,
@@ -49,10 +71,9 @@ const enrollStudent = async (req, res) => {
         );
 
         res.json({ message: 'Student Enrolled Successfully' });
-
     } catch (error) {
         console.error("Enrollment Error:", error);
-        res.status(500).json({ message: 'Server Error during enrollment' });
+        res.status(500).json({ message: 'Server Error' });
     } finally {
         connection.release();
     }

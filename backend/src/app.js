@@ -12,6 +12,7 @@ const certificateRoutes = require('./routes/certificateRoutes');
 const verifyRoutes = require('./routes/verifyRoutes');
 const studentRoutes = require('./routes/studentRoutes');
 const adminRoutes = require('./routes/adminRoutes'); // Explicit import
+const institutionRoutes = require('./routes/institutionRoutes');
 
 const app = express();
 
@@ -29,6 +30,7 @@ app.use('/api/v1/certificates', certificateRoutes);
 app.use('/api/v1/verify', verifyRoutes);
 app.use('/api/v1/students', studentRoutes);
 app.use('/api/v1/admin', adminRoutes);
+app.use('/api/v1/institution', institutionRoutes);
 
 // Health Check
 app.get('/', (req, res) => {

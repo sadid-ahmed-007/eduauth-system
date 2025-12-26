@@ -1,7 +1,11 @@
 const db = require('../config/db');
 
 const getMyCertificates = async (req, res) => {
-    const userId = req.user.id; // From JWT token
+    const userId = req.user?.user_id; // From JWT token
+
+    if (!userId) {
+        return res.status(401).json({ message: 'Unauthorized' });
+    }
 
     const connection = await db.getConnection();
     try {
