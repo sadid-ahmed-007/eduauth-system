@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useSearchParams } from 'react-router-dom';
 import api from '../services/api';
 import QRCode from 'react-qr-code';
 import html2canvas from 'html2canvas';
@@ -7,10 +7,12 @@ import jsPDF from 'jspdf';
 
 const VerifyResult = () => {
     const { hash } = useParams(); // Get hash from URL
+    const [searchParams] = useSearchParams();
     const [data, setData] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(false);
     const certificateRef = useRef(null);
+    const [autoDownloaded, setAutoDownloaded] = useState(false);
 
     useEffect(() => {
         const verify = async () => {
@@ -26,6 +28,15 @@ const VerifyResult = () => {
         };
         verify();
     }, [hash]);
+
+    useEffect(() => {
+        const shouldDownload = searchParams.get('download') === '1';
+        if (!shouldDownload || autoDownloaded || !data) {
+            return;
+        }
+        setAutoDownloaded(true);
+        handleDownload();
+    }, [searchParams, autoDownloaded, data]);
 
     const handleDownload = async () => {
         if (!certificateRef.current) {
@@ -111,6 +122,14 @@ const VerifyResult = () => {
                         <h1 className="text-3xl font-bold text-gray-800">{data.credential_name}</h1>
                         <p className="text-gray-500 mt-2">Awarded to</p>
                         <h2 className="text-2xl font-semibold text-blue-900">{data.student_name}</h2>
+                        <p className="text-gray-600 text-sm mt-4 max-w-xl mx-auto">
+                            This is to certify that <span className="font-semibold">{data.student_name}</span> has successfully
+                            completed the requirements for <span className="font-semibold">{data.credential_name}</span> awarded
+                            by <span className="font-semibold">{data.issuer_name}</span>.
+                        </p>
+                        <p className="text-gray-400 text-xs mt-2">
+                            This credential is digitally signed and can be verified via EduAuth Registry.
+                        </p>
                     </div>
 
                     <div className="grid grid-cols-2 gap-6 border-t border-b border-gray-100 py-6">

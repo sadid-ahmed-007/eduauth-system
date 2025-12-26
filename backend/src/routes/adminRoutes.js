@@ -18,5 +18,7 @@ router.get('/pending', protect, adminOnly, adminController.getPendingUsers); // 
 router.get('/institutions', protect, adminOnly, adminController.getActiveInstitutions);
 router.put('/approve/:userId', protect, adminOnly, adminController.approveUser);
 router.put('/permission/:userId', protect, adminOnly, adminController.toggleIssuePermission);
+router.get('/profile-requests', protect, adminOnly, adminController.getProfileRequests);
+router.post('/profile-requests/:requestId/decision', protect, adminOnly, adminController.reviewProfileRequest);
 
 module.exports = router;

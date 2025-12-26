@@ -75,8 +75,53 @@ const sendCertificateIssuedEmail = async ({
     return sendEmail({ to, subject, text, html });
 };
 
+const sendInstitutionAccessEmail = async ({ to, institutionName, canIssue }) => {
+    if (!to) {
+        return { skipped: true };
+    }
+
+    const statusText = canIssue ? 'enabled' : 'disabled';
+    const subject = `EduAuth certificate issuing ${statusText}`;
+    const text = `Hello ${institutionName || 'Institution'}, your certificate issuing access has been ${statusText} by the authority.`;
+    const html = `<p>Hello ${institutionName || 'Institution'},</p>
+<p>Your certificate issuing access has been <strong>${statusText}</strong> by the authority.</p>`;
+
+    return sendEmail({ to, subject, text, html });
+};
+
+const sendProfileRequestReceivedEmail = async ({ to, studentName }) => {
+    if (!to) {
+        return { skipped: true };
+    }
+
+    const subject = 'We received your profile update request';
+    const text = `Hello ${studentName || 'Student'}, your profile update request has been received and is pending review by the authority.`;
+    const html = `<p>Hello ${studentName || 'Student'},</p>
+<p>Your profile update request has been received and is pending review by the authority.</p>`;
+
+    return sendEmail({ to, subject, text, html });
+};
+
+const sendProfileRequestDecisionEmail = async ({ to, studentName, status, comment }) => {
+    if (!to) {
+        return { skipped: true };
+    }
+
+    const normalizedStatus = status === 'approved' ? 'approved' : 'rejected';
+    const subject = `Your profile update request was ${normalizedStatus}`;
+    const text = `Hello ${studentName || 'Student'}, your profile update request was ${normalizedStatus}.${comment ? ` Comment: ${comment}` : ''}`;
+    const html = `<p>Hello ${studentName || 'Student'},</p>
+<p>Your profile update request was <strong>${normalizedStatus}</strong>.</p>
+${comment ? `<p>Comment: ${comment}</p>` : ''}`;
+
+    return sendEmail({ to, subject, text, html });
+};
+
 module.exports = {
     sendEmail,
     sendAccountApprovedEmail,
-    sendCertificateIssuedEmail
+    sendCertificateIssuedEmail,
+    sendInstitutionAccessEmail,
+    sendProfileRequestReceivedEmail,
+    sendProfileRequestDecisionEmail
 };
