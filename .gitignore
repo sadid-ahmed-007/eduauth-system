@@ -1,0 +1,17 @@
+# --- Dependencies ---
+node_modules/
+package-lock.json
+yarn.lock
+
+# --- Secrets (CRITICAL) ---
+.env
+.DS_Store
+
+# --- Build Outputs ---
+/frontend/dist/
+/frontend/build/
+/backend/uploads/
+
+# --- Logs ---
+npm-debug.log
+*.log
