@@ -10,7 +10,6 @@ EduAuth Registry is a centralized, privacy-focused academic verification platfor
 ---
 
 ## 📸 Screenshots
-*(Add your screenshots in a `docs/` folder and uncomment these lines)*
 
 | Admin Dashboard | Student Profile | Verified Certificate |
 |:---:|:---:|:---:|
