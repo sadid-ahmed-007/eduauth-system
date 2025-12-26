@@ -2,6 +2,7 @@ import { useEffect, useState, useContext } from 'react';
 import api from '../services/api';
 import { AuthContext } from '../context/AuthContext';
 import { toast } from 'react-toastify';
+import QRCode from 'react-qr-code';
 
 const StudentDashboard = () => {
     const { user, logout } = useContext(AuthContext);
@@ -51,7 +52,9 @@ const StudentDashboard = () => {
                     </div>
                 ) : (
                     <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        {certificates.map((cert) => (
+                        {certificates.map((cert) => {
+                            const verifyUrl = `${window.location.origin}/verify/${cert.certificate_hash}`;
+                            return (
                             <div key={cert.certificate_hash} className="bg-white p-6 rounded-lg shadow border-l-4 border-blue-500 hover:shadow-lg transition">
                                 <div className="flex justify-between items-start mb-4">
                                     <span className="bg-blue-100 text-blue-800 text-xs font-semibold px-2 py-1 rounded">
@@ -87,9 +90,16 @@ const StudentDashboard = () => {
                                             Copy
                                         </button>
                                     </div>
+                                    <div className="mt-4 flex flex-col items-center gap-2">
+                                        <p className="text-xs text-gray-400">Scan to Verify</p>
+                                        <div className="bg-white p-2 rounded border">
+                                            <QRCode value={verifyUrl} size={96} />
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
-                        ))}
+                            );
+                        })}
                     </div>
                 )}
             </div>

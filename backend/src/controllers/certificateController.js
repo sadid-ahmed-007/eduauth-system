@@ -1,6 +1,7 @@
 const db = require('../config/db');
 const { v4: uuidv4 } = require('uuid');
 const crypto = require('crypto');
+const { sendCertificateIssuedEmail } = require('../services/emailService');
 
 // 1. Issue Certificate (Strict Mode)
 const issueCertificate = async (req, res) => {
@@ -74,6 +75,36 @@ const issueCertificate = async (req, res) => {
         );
 
         await connection.commit();
+
+        try {
+            const [studentRows] = await connection.execute(
+                `SELECT u.email, si.full_name
+                 FROM students s
+                 JOIN users u ON s.user_id = u.user_id
+                 JOIN student_identities si ON s.identity_id = si.identity_id
+                 WHERE s.student_id = ?`,
+                [studentId]
+            );
+
+            const [issuerRows] = await connection.execute(
+                `SELECT institution_name
+                 FROM institutions
+                 WHERE institution_id = ?`,
+                [issuerId]
+            );
+
+            if (studentRows.length > 0) {
+                await sendCertificateIssuedEmail({
+                    to: studentRows[0].email,
+                    studentName: studentRows[0].full_name,
+                    credentialName,
+                    issuerName: issuerRows[0]?.institution_name || 'Institution',
+                    certificateHash
+                });
+            }
+        } catch (emailError) {
+            console.error('Certificate email failed:', emailError);
+        }
 
         res.status(201).json({
             message: 'Certificate Issued Successfully',

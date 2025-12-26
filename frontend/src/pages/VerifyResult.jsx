@@ -1,12 +1,16 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import api from '../services/api';
+import QRCode from 'react-qr-code';
+import html2canvas from 'html2canvas';
+import jsPDF from 'jspdf';
 
 const VerifyResult = () => {
     const { hash } = useParams(); // Get hash from URL
     const [data, setData] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(false);
+    const certificateRef = useRef(null);
 
     useEffect(() => {
         const verify = async () => {
@@ -22,6 +26,29 @@ const VerifyResult = () => {
         };
         verify();
     }, [hash]);
+
+    const handleDownload = async () => {
+        if (!certificateRef.current) {
+            return;
+        }
+
+        const canvas = await html2canvas(certificateRef.current, {
+            scale: 2,
+            useCORS: true,
+            backgroundColor: '#ffffff'
+        });
+
+        const imgData = canvas.toDataURL('image/png');
+        const pdf = new jsPDF('p', 'pt', 'a4');
+        const pageWidth = pdf.internal.pageSize.getWidth();
+        const pageHeight = pdf.internal.pageSize.getHeight();
+        const imgWidth = pageWidth;
+        const imgHeight = (canvas.height * imgWidth) / canvas.width;
+        const yOffset = imgHeight < pageHeight ? (pageHeight - imgHeight) / 2 : 0;
+
+        pdf.addImage(imgData, 'PNG', 0, yOffset, imgWidth, imgHeight);
+        pdf.save(`certificate-${hash}.pdf`);
+    };
 
     return (
         <div className="min-h-screen bg-gray-50 flex flex-col items-center py-12 px-4">
@@ -41,7 +68,19 @@ const VerifyResult = () => {
                     </p>
                 </div>
             ) : (
-                <div className="bg-white p-10 rounded-xl shadow-2xl max-w-2xl w-full border-t-8 border-green-500 relative overflow-hidden">
+                <div className="w-full max-w-2xl">
+                    <div className="flex justify-end mb-4">
+                        <button
+                            onClick={handleDownload}
+                            className="bg-blue-600 text-white px-4 py-2 rounded text-sm font-bold hover:bg-blue-700 transition"
+                        >
+                            Download PDF
+                        </button>
+                    </div>
+                    <div
+                        ref={certificateRef}
+                        className="bg-white p-10 rounded-xl shadow-2xl w-full border-t-8 border-green-500 relative overflow-hidden"
+                    >
                     {/* Background Watermark */}
                     <div className="absolute top-0 right-0 opacity-5 pointer-events-none">
                         <svg width="300" height="300" viewBox="0 0 24 24" fill="currentColor">
@@ -60,6 +99,7 @@ const VerifyResult = () => {
                                 src={`http://localhost:5000${data.photo_url}`} 
                                 alt="Student" 
                                 className="w-32 h-32 rounded-full mx-auto mb-4 object-cover border-4 border-white shadow-lg"
+                                crossOrigin="anonymous"
                             />
                         ) : (
                             <div className="w-32 h-32 rounded-full mx-auto mb-4 bg-gray-200 flex items-center justify-center text-4xl shadow-lg border-4 border-white text-gray-400">
@@ -107,6 +147,13 @@ const VerifyResult = () => {
                              {data.certificate_hash}
                          </p>
                     </div>
+                    <div className="mt-8 flex flex-col items-center gap-2">
+                        <p className="text-xs text-gray-400">Scan to Verify</p>
+                        <div className="bg-white p-2 rounded border">
+                            <QRCode value={`${window.location.origin}/verify/${data.certificate_hash}`} size={110} />
+                        </div>
+                    </div>
+                </div>
                 </div>
             )}
         </div>

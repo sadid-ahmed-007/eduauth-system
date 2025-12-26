@@ -1,4 +1,5 @@
 const db = require('../config/db');
+const { sendAccountApprovedEmail } = require('../services/emailService');
 
 // --- GETTERS ---
 
@@ -69,7 +70,7 @@ const approveUser = async (req, res) => {
     const connection = await db.getConnection();
     try {
         const [users] = await connection.execute(
-            "SELECT user_id, role, status FROM users WHERE user_id = ?",
+            "SELECT user_id, role, status, email FROM users WHERE user_id = ?",
             [userId]
         );
 
@@ -109,6 +110,35 @@ const approveUser = async (req, res) => {
         }
 
         await connection.commit();
+
+        try {
+            const [profileRows] = await connection.execute(
+                `SELECT u.email,
+                        u.role,
+                        si.full_name,
+                        i.institution_name
+                 FROM users u
+                 LEFT JOIN students s ON u.user_id = s.user_id
+                 LEFT JOIN student_identities si ON s.identity_id = si.identity_id
+                 LEFT JOIN institutions i ON u.user_id = i.user_id
+                 WHERE u.user_id = ?`,
+                [userId]
+            );
+
+            if (profileRows.length > 0) {
+                const profile = profileRows[0];
+                const displayName = profile.role === 'institution'
+                    ? profile.institution_name
+                    : profile.full_name;
+                await sendAccountApprovedEmail({
+                    to: profile.email,
+                    role: profile.role,
+                    name: displayName
+                });
+            }
+        } catch (emailError) {
+            console.error('Approval email failed:', emailError);
+        }
 
         res.json({ message: 'User Approved Successfully' });
     } catch (error) {
